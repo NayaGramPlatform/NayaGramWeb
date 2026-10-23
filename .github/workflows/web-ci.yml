@@ -17,12 +17,26 @@ jobs:
   build:
     name: Install, test, typecheck and production build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: Fetch pinned submodules (retry transient upstream errors)
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if git submodule sync --recursive &&
+               git -c protocol.version=2 submodule update --init --depth=1 --recursive; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Submodule fetch failed on attempt $attempt; retrying in 15 seconds."
+              sleep 15
+            fi
+          done
+          echo "Could not fetch one or more pinned submodules after 3 attempts."
+          exit 1
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -32,7 +46,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.22.0
           cache: pnpm
 
       - name: Install dependencies
