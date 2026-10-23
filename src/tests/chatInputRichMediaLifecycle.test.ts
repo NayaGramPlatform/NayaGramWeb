@@ -114,7 +114,7 @@ test.each(['none', 'normal-close', 'peer', 'thread', 'edit', 'new-editor', 'dest
     const middleware = getMiddleware();
     const pending = deferredPromise<{blob: Blob}>();
     mediaEditor.open.mockReset();
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Blob(['photo'], {type: 'image/jpeg'})));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(new Uint8Array([112, 104, 111, 116, 111]), {headers: {'content-type': 'image/jpeg'}}));
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:editing-context');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     const source = createSource();
@@ -168,7 +168,7 @@ for(const stage of ['download', 'source'] as const) test.each([
   const download = deferredPromise<Response>();
   const loadingSource = deferredPromise<HTMLImageElement>();
   const source = createSource();
-  const response = () => new Response(new Blob(['photo'], {type: 'image/jpeg'}));
+  const response = () => new Response(new Uint8Array([112, 104, 111, 116, 111]), {headers: {'content-type': 'image/jpeg'}});
   mediaEditor.open.mockClear();
   vi.mocked(createImageSource).mockReset().mockReturnValue(loadingSource);
   vi.spyOn(globalThis, 'fetch').mockReturnValue(stage === 'download' ? download : Promise.resolve(response()));
