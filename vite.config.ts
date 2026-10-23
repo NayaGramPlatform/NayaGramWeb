@@ -219,6 +219,8 @@ function compileHintsPlugin(): Plugin {
 }
 
 export default defineConfig({
+  // GitHub Pages project sites are served from /<repository-name>/; keep local and self-hosted builds at root.
+  base: process.env.GITHUB_PAGES === 'true' ? '/NayaGramWeb/' : '/',
   plugins: [
     // devtools({
     //   /* features options - all disabled by default */
