@@ -63,10 +63,10 @@ if(isDEV) {
 
 const handlebarsPlugin = handlebars({
   context: {
-    title: 'Telegram Web',
-    description: 'Telegram is a cloud-based mobile and desktop messaging app with a focus on security and speed.',
-    url: 'https://web.telegram.org/k/',
-    origin: 'https://web.telegram.org/'
+    title: 'NayaGram Web',
+    description: 'NayaGram Web — messaging, groups, channels, and calls in one place.',
+    url: 'https://nayagramplatform.github.io/NayaGramWeb/',
+    origin: 'https://nayagramplatform.github.io/'
   }
 });
 
