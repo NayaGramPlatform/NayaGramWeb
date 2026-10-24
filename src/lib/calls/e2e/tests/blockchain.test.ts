@@ -294,9 +294,18 @@ describe('Blockchain.applyBlock', () => {
 // height/prev-hash/signature) — only the AUTHORIZATION is illegitimate.
 describe('Blockchain.applyBlock — per-change authorization (WebK-2)', () => {
   const aliceId = BigInt(1), bobId = BigInt(2), attackerId = BigInt(666);
-  const alice = PrivateKey.fromSeed(new Uint8Array(32).fill(0xa1));
-  const bob = PrivateKey.fromSeed(new Uint8Array(32).fill(0xb2));
-  const attacker = PrivateKey.fromSeed(new Uint8Array(32).fill(0xcc));
+  // These keys are created at module-evaluation time if declared as consts in
+  // this describe block, before the async sodium.ready hook has completed.
+  let alice: PrivateKey;
+  let bob: PrivateKey;
+  let attacker: PrivateKey;
+
+  beforeAll(async() => {
+    await ensureCryptoReady();
+    alice = PrivateKey.fromSeed(new Uint8Array(32).fill(0xa1));
+    bob = PrivateKey.fromSeed(new Uint8Array(32).fill(0xb2));
+    attacker = PrivateKey.fromSeed(new Uint8Array(32).fill(0xcc));
+  });
 
   function part(userId: bigint, sk: PrivateKey, add: boolean, remove: boolean): GroupParticipant {
     return {userId, publicKey: sk.publicKeyBytes, canAddUsers: add, canRemoveUsers: remove, version: 0};
