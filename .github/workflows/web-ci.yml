@@ -1,0 +1,51 @@
+name: Web CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-ci-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Install, test, typecheck and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # opus-recorder includes prebuilt dist assets; nested source submodules
+          # are only needed to rebuild that library, not the web client.
+          # Avoid making normal app CI depend on upstream GitLab mirrors.
+          submodules: true
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run project build checks
+        run: pnpm run build
+
+      - name: Verify GitHub Pages base path build
+        run: |
+          GITHUB_PAGES=true pnpm exec vite build
+          test -f dist/index.html
+          grep -q '/NayaGramWeb/' dist/index.html
