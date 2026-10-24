@@ -43,3 +43,9 @@ jobs:
 
       - name: Run project build checks
         run: pnpm run build
+
+      - name: Verify GitHub Pages base path build
+        run: |
+          GITHUB_PAGES=true pnpm exec vite build
+          test -f dist/index.html
+          grep -q '/NayaGramWeb/' dist/index.html
