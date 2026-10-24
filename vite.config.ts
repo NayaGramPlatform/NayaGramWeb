@@ -219,8 +219,7 @@ function compileHintsPlugin(): Plugin {
 }
 
 export default defineConfig({
-  // GitHub Pages project sites are served from /<repository-name>/; keep local and self-hosted builds at root.
-  base: process.env.GITHUB_PAGES === 'true' ? '/NayaGramWeb/' : '/',
+  // Keep the root path by default; GitHub Pages project sites use /NayaGramWeb/.
   plugins: [
     // devtools({
     //   /* features options - all disabled by default */
@@ -293,7 +292,7 @@ export default defineConfig({
     setupFiles: ['./src/tests/setup.ts']
   },
   server: serverOptions,
-  base: '',
+  base: process.env.GITHUB_PAGES === 'true' ? '/NayaGramWeb/' : '',
   // Pin the dep-optimizer's scan to the real entry (index.html → src/index.ts).
   // Otherwise Vite auto-globs every *.html (stats.html, public/*.html, the icomoon
   // demo.html) as scan entries, and a parse error in any of them (e.g. the stale
