@@ -48,7 +48,13 @@ jobs:
           GITHUB_PAGES=true pnpm exec vite build
           test -f dist/index.html
           grep -q '/NayaGramWeb/' dist/index.html
+          # Vite keeps copyPublicDir off so stale files in public/ are not published.
+          # The app still requests public/assets and browserconfig.xml at runtime.
+          mkdir -p dist/assets
+          cp -a public/assets/. dist/assets/
+          cp public/browserconfig.xml dist/browserconfig.xml
           cp dist/index.html dist/404.html
+          test -f dist/assets/img/favicon-32x32.png
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
