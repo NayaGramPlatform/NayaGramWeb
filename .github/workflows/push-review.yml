@@ -130,10 +130,17 @@ jobs:
 
       - name: Tell Telegram the result
         if: always()
+        continue-on-error: true
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          # Telegram notifications are optional; missing repository secrets must not
+          # make the security-review workflow itself fail.
+          if [ -z "$TG_TOKEN" ] || [ -z "$TG_CHAT" ]; then
+            echo "Telegram notification skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured."
+            exit 0
+          fi
           . "$RUNNER_TEMP/tg.sh"
           v="$RUNNER_TEMP/verdict.json"
           body="$RUNNER_TEMP/body.txt"
