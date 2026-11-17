@@ -53,6 +53,8 @@ jobs:
           mkdir -p dist/assets
           cp -a public/assets/. dist/assets/
           cp public/browserconfig.xml dist/browserconfig.xml
+          cp public/site.webmanifest dist/site.webmanifest
+          cp public/site_apple.webmanifest dist/site_apple.webmanifest
           cp dist/index.html dist/404.html
           test -f dist/assets/img/favicon-32x32.png
 

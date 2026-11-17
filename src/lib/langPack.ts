@@ -342,8 +342,35 @@ namespace I18n {
     strings.clear();
     untranslatedKeys.clear();
 
+    const NAYAGRAM_BRAND_KEYS = new Set<string>([
+      'Login.Title',
+      'Login.QR.Title',
+      'Login.QR.Help1',
+      'Login.QR.Subtitle',
+      'Login.Code.SentInApp',
+      'Login.ResetEmail.Text',
+      'Login.ResetEmail.NeedPremium',
+      'Login.ResetEmail.NeedPremiumText',
+      'AppName',
+      'TelegramFeatures',
+      'TelegramBusiness',
+      'Link.NotSupported',
+      'BusinessLocationMapUnsupported'
+    ]);
     for(const string of langPack.strings) {
-      strings.set(string.key as LangPackKey, string);
+      if(NAYAGRAM_BRAND_KEYS.has(string.key) && string._ === 'langPackString' && typeof(string.value) === 'string') {
+        strings.set(string.key as LangPackKey, {
+          ...string,
+          value: string.value.replace(/Telegram Web/g, 'NayaGram Web').replace(/Telegram/g, 'NayaGram')
+        });
+      } else if(string.key === 'TelegramFeaturesUrl' && string._ === 'langPackString') {
+        strings.set(string.key as LangPackKey, {
+          ...string,
+          value: 'https://t.me/NayaGramPro'
+        });
+      } else {
+        strings.set(string.key as LangPackKey, string);
+      }
     }
 
     const rtl = langPack.rtl ?? isRTLLangCode(langPack.lang_code);

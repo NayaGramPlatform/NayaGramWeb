@@ -997,7 +997,7 @@ export class AppSidebarLeft extends SidebarSlider {
       onClick: () => {
         const a = document.createElement('a');
         setBlankToAnchor(a);
-        a.href = 'https://bugs.telegram.org/?tag_ids=40&sort=time';
+        a.href = 'https://github.com/NayaGramPlatform/NayaGramWeb/issues';
         document.body.append(a);
         a.click();
         setTimeout(() => {
@@ -1915,7 +1915,7 @@ export default appSidebarLeft;
 
 function getVersionLink() {
   const btnMenuFooter = document.createElement('a');
-  btnMenuFooter.href = 'https://github.com/morethanwords/tweb/blob/master/CHANGELOG.md';
+  btnMenuFooter.href = 'https://github.com/NayaGramPlatform/NayaGramWeb';
   setBlankToAnchor(btnMenuFooter);
   btnMenuFooter.classList.add('btn-menu-footer');
   btnMenuFooter.addEventListener(CLICK_EVENT_NAME, (e) => {
@@ -1924,7 +1924,7 @@ function getVersionLink() {
   });
   const t = document.createElement('span');
   t.classList.add('btn-menu-footer-text');
-  t.textContent = `Telegram Web${App.suffix} ${App.version} (${App.build})`;
+  t.textContent = `NayaGram Web ${App.version} (${App.build})`;
   btnMenuFooter.append(t);
 
   return btnMenuFooter;
