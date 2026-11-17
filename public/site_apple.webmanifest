@@ -1,7 +1,7 @@
 {
     "name": "NayaGram Web",
     "short_name": "NayaGram Web",
-    "id": "/NayaGramWeb/",
+    "id": "/k/",
     "start_url": "./",
     "scope": "./",
     "scope_extensions": [

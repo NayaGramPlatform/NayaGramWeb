@@ -2311,6 +2311,9 @@ export default class ChatBubbles {
 
       const mids = [...msgs.keys()];
       const fullMids = mids.map((mid) => makeFullMid(peerId, mid));
+      if((window as any).__NAYAGRAM_ON_DELETE__?.(peerId, mids, fullMids, this.bubbles)) {
+        return;
+      }
       this.deleteMessagesByIds(fullMids);
       this.updateMessageReply({
         peerId,
@@ -3579,7 +3582,7 @@ export default class ChatBubbles {
           this.log('will readHistory by maxId:', maxId);
         }
 
-        callback = () => this.managers.appMessagesManager.readHistory({peerId, maxId, threadId, monoforumThreadId});
+        callback = () => (window as any).__NAYAGRAM_CONFIG__?.ghostUnread ? Promise.resolve() : this.managers.appMessagesManager.readHistory({peerId, maxId, threadId, monoforumThreadId});
       } else {
         const readContents: number[] = [];
         for(const mid of this.unreadedContentSeen) {
@@ -6981,13 +6984,15 @@ export default class ChatBubbles {
       const {peerId, threadId, monoforumThreadId} = this.chat;
       const historyMaxId = this.chat.getHistoryMaxId();
 
-      this.managers.appMessagesManager.readHistory({
-        peerId,
-        maxId: historyMaxId,
-        threadId,
-        monoforumThreadId,
-        force: true
-      });
+      if(!(window as any).__NAYAGRAM_CONFIG__?.ghostUnread) {
+        this.managers.appMessagesManager.readHistory({
+          peerId,
+          maxId: historyMaxId,
+          threadId,
+          monoforumThreadId,
+          force: true
+        });
+      }
     }
   }
 

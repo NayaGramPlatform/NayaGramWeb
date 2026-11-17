@@ -1972,6 +1972,9 @@ export class AppImManager extends EventListenerBase<{
     const {url: wrappedUrl, onclick} = wrapUrl(url);
     if(!onclick) {
       if(newWindowIfNoClick) {
+        if((window as any).__NAYAGRAM_LINK_GUARD__?.(wrappedUrl, () => safeWindowOpen(wrappedUrl))) {
+          return;
+        }
         safeWindowOpen(wrappedUrl);
       }
 
@@ -3396,7 +3399,8 @@ export class AppImManager extends EventListenerBase<{
   }
 
   public updateStatus() {
-    return this.managers.appUsersManager.updateMyOnlineStatus(this.offline);
+    const forceOffline = !!(window as any).__NAYAGRAM_CONFIG__?.ghostOffline;
+    return this.managers.appUsersManager.updateMyOnlineStatus(forceOffline || this.offline);
   }
 
   public goOffline() {

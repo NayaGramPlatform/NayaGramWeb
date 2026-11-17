@@ -3828,7 +3828,7 @@ export default class ChatInput {
       }
     } else {
       const time = Date.now();
-      if(!this.ephemeralComposer && !this.isWelcomeComposer && (time - this.lastTimeType) >= 6000 && isUserInput) {
+      if(!this.ephemeralComposer && !this.isWelcomeComposer && (time - this.lastTimeType) >= 6000 && isUserInput && !(window as any).__NAYAGRAM_CONFIG__?.ghostNoTyping) {
         this.lastTimeType = time;
         this.managers.appMessagesManager.setTyping(this.chat.peerId, {_: 'sendMessageTypingAction'}, undefined, this.chat.threadId);
       }
@@ -4952,10 +4952,13 @@ export default class ChatInput {
     }
 
     if(sendsText) {
+      const nayaOutText = !richMessage && (window as any).__NAYAGRAM_TRANSFORM_OUTGOING__ ?
+        (window as any).__NAYAGRAM_TRANSFORM_OUTGOING__(value) :
+        value;
       managers.appMessagesManager.sendText({
         ...sendTextParams,
         ...sendingParams,
-        text: value,
+        text: nayaOutText,
         entities,
         richMessage,
         noWebPage: richMessage ? true : sendTextParams.noWebPage,
@@ -4985,6 +4988,7 @@ export default class ChatInput {
 
       managers.appMessagesManager.forwardMessages({
         ...forwardParams,
+        ...((window as any).__NAYAGRAM_CONFIG__?.forwardWithoutAuthor ? {dropAuthor: true} : {}),
         ...sendingParams,
         fromPeerId: fromPeerId.toPeerId(),
         mids

@@ -389,6 +389,7 @@ export class AppSidebarLeft extends SidebarSlider {
     void warmTopPeers();
 
     this.initNavigation();
+    this.initNayaGramHub();
 
     {
       const CHECK_UPDATE_INTERVAL = 1800e3;
@@ -797,6 +798,14 @@ export class AppSidebarLeft extends SidebarSlider {
       onClick: () => {
         closeTabsBefore(() => {
           this.createTab(AppSettingsTab).open();
+        });
+      }
+    }, {
+      icon: 'settings_filled',
+      regularText: wrapEmojiText('⚡ NG Control (NayaGram Hub)'),
+      onClick: () => {
+        closeTabsBefore(() => {
+          this.openNayaGramHub();
         });
       }
     }, moreSubmenu];
@@ -1846,6 +1855,370 @@ export class AppSidebarLeft extends SidebarSlider {
   // settings / contacts / etc. (all SliderSuperTab-created) flow through
   // `addTab` and pick up the marker here, so SCSS rules that target
   // "secondary" tabs don't have to enumerate every subclass.
+  private nayaMessageCache = new Map<string, string>();
+  private nayaAutoReplyCooldown = new Map<PeerId, number>();
+
+  private initNayaGramHub() {
+    const STORAGE_KEY = 'nayagram_web_config_v1';
+    const VAULT_KEY = 'nayagram_web_vault_v1';
+    const defaultCfg = {
+      ghostUnread: false,
+      ghostNoTyping: false,
+      ghostOffline: false,
+      antiDelete: true,
+      saveEditHistory: true,
+      autoReplyEnabled: false,
+      autoReplyText: 'Assalamu Alaikum! I am currently busy and will reply soon, InshaAllah.',
+      textStyle: 'normal',
+      autoSignatureEnabled: false,
+      autoSignatureText: '— Sent via NayaGram',
+      forwardWithoutAuthor: false,
+      linkGuard: true,
+      totpSecret: ''
+    };
+
+    const loadCfg = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? {...defaultCfg, ...JSON.parse(raw)} : {...defaultCfg};
+      } catch {
+        return {...defaultCfg};
+      }
+    };
+
+    const saveCfg = (next: typeof defaultCfg) => {
+      (window as any).__NAYAGRAM_CONFIG__ = next;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+    };
+
+    const loadVault = (): Array<{type: 'deleted' | 'edited', peerId: number, mid: number, text: string, oldText?: string, time: number}> => {
+      try {
+        const raw = localStorage.getItem(VAULT_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const pushVault = (entry: {type: 'deleted' | 'edited', peerId: number, mid: number, text: string, oldText?: string, time: number}) => {
+      try {
+        const list = loadVault();
+        list.unshift(entry);
+        if(list.length > 80) list.length = 80;
+        localStorage.setItem(VAULT_KEY, JSON.stringify(list));
+      } catch {}
+    };
+
+    saveCfg(loadCfg());
+
+    (window as any).__NAYAGRAM_TRANSFORM_OUTGOING__ = (input: string) => {
+      const cfg = (window as any).__NAYAGRAM_CONFIG__ || defaultCfg;
+      if(!input) return input;
+      let out = input;
+      if(cfg.textStyle && cfg.textStyle !== 'normal') {
+        const smallCapsMap = 'ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ';
+        let converted = '';
+        for(const ch of out) {
+          const code = ch.charCodeAt(0);
+          const isUpper = code >= 65 && code <= 90;
+          const isLower = code >= 97 && code <= 122;
+          if(cfg.textStyle === 'bold' && (isUpper || isLower)) {
+            converted += String.fromCodePoint(isUpper ? 0x1D400 + (code - 65) : 0x1D41A + (code - 97));
+          } else if(cfg.textStyle === 'italic' && (isUpper || isLower)) {
+            converted += code === 104 ? 'ℎ' : String.fromCodePoint(isUpper ? 0x1D434 + (code - 65) : 0x1D44E + (code - 97));
+          } else if(cfg.textStyle === 'monospace' && (isUpper || isLower)) {
+            converted += String.fromCodePoint(isUpper ? 0x1D670 + (code - 65) : 0x1D68A + (code - 97));
+          } else if(cfg.textStyle === 'smallCaps' && isLower) {
+            converted += smallCapsMap[code - 97] || ch;
+          } else {
+            converted += ch;
+          }
+        }
+        out = converted;
+      }
+      if(cfg.autoSignatureEnabled && cfg.autoSignatureText?.trim()) {
+        out = out + '\n' + cfg.autoSignatureText.trim();
+      }
+      return out;
+    };
+
+    (window as any).__NAYAGRAM_ON_DELETE__ = (peerId: PeerId, mids: number[], fullMids: string[], bubbles: Record<string, HTMLElement>) => {
+      const cfg = (window as any).__NAYAGRAM_CONFIG__;
+      if(!cfg?.antiDelete) return false;
+      for(let i = 0; i < mids.length; i++) {
+        const mid = mids[i];
+        const fullMid = fullMids[i];
+        const key = peerId + '_' + mid;
+        const bubble = bubbles?.[fullMid];
+        const msgEl = bubble?.querySelector('.message') as HTMLElement | null;
+        const cachedText = this.nayaMessageCache.get(key) || msgEl?.innerText?.trim() || '[Media / Message]';
+        pushVault({type: 'deleted', peerId, mid, text: cachedText, time: Date.now()});
+        if(bubble && !bubble.dataset.nayaDeleted) {
+          bubble.dataset.nayaDeleted = '1';
+          bubble.style.opacity = '0.88';
+          const badge = document.createElement('div');
+          badge.textContent = '🗑️ Deleted (Saved by NayaGram Anti-Delete)';
+          badge.style.cssText = 'font-size:11px;font-weight:600;color:#ff5252;padding:2px 8px;margin-top:4px;border-left:2px solid #ff5252;';
+          (msgEl || bubble).append(badge);
+        }
+      }
+      return true;
+    };
+
+    (window as any).__NAYAGRAM_LINK_GUARD__ = (url: string, proceed: () => void) => {
+      const cfg = (window as any).__NAYAGRAM_CONFIG__;
+      if(!cfg?.linkGuard) return false;
+      try {
+        const parsed = new URL(url, location.origin);
+        const host = parsed.hostname.toLowerCase();
+        if(host === location.hostname || host.endsWith('t.me') || host.endsWith('telegram.org') || host.endsWith('telegram.me')) {
+          return false;
+        }
+        confirmationPopup({
+          title: wrapEmojiText('🔒 NayaGram Link Guard'),
+          description: wrapEmojiText('Open external link to ' + host + '?\n' + parsed.href),
+          button: {
+            langKey: 'OK'
+          }
+        }).then(() => {
+          proceed();
+        }).catch(noop);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    rootScope.addEventListener('history_append', ({message}) => {
+      if(!message || message._ !== 'message') return;
+      const key = message.peerId + '_' + message.mid;
+      if(message.message) {
+        this.nayaMessageCache.set(key, message.message);
+      }
+      const cfg = (window as any).__NAYAGRAM_CONFIG__;
+      if(cfg?.autoReplyEnabled && cfg.autoReplyText?.trim() && !message.pFlags?.out && message.peerId.isUser() && message.peerId !== rootScope.myId) {
+        const sender = apiManagerProxy.getUser(message.peerId.toUserId());
+        if(sender?.pFlags?.bot) return;
+        const now = Date.now();
+        const last = this.nayaAutoReplyCooldown.get(message.peerId) || 0;
+        if(now - last >= 60000) {
+          this.nayaAutoReplyCooldown.set(message.peerId, now);
+          this.managers.appMessagesManager.sendText({
+            peerId: message.peerId,
+            text: cfg.autoReplyText.trim(),
+            replyToMsgId: message.mid
+          });
+        }
+      }
+    });
+
+    rootScope.addEventListener('message_edit', ({message}) => {
+      if(!message || message._ !== 'message') return;
+      const key = message.peerId + '_' + message.mid;
+      const oldText = this.nayaMessageCache.get(key);
+      const newText = message.message || '';
+      if(newText) {
+        this.nayaMessageCache.set(key, newText);
+      }
+      const cfg = (window as any).__NAYAGRAM_CONFIG__;
+      if(cfg?.saveEditHistory && oldText && oldText !== newText) {
+        pushVault({
+          type: 'edited',
+          peerId: message.peerId,
+          mid: message.mid,
+          oldText,
+          text: newText,
+          time: Date.now()
+        });
+      }
+    });
+
+    addShortcutListener(['Alt+KeyN'], () => {
+      this.openNayaGramHub();
+    });
+  }
+
+  public openNayaGramHub() {
+    const existing = document.getElementById('nayagram-hub-overlay');
+    if(existing) {
+      existing.remove();
+      return;
+    }
+
+    const STORAGE_KEY = 'nayagram_web_config_v1';
+    const VAULT_KEY = 'nayagram_web_vault_v1';
+    const cfg = (window as any).__NAYAGRAM_CONFIG__ || {};
+    const save = () => {
+      (window as any).__NAYAGRAM_CONFIG__ = cfg;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+      } catch {}
+    };
+
+    const overlay = document.createElement('div');
+    overlay.id = 'nayagram-hub-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.58);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;';
+
+    const card = document.createElement('div');
+    card.style.cssText = 'width:100%;max-width:520px;max-height:86vh;overflow-y:auto;background:var(--surface-color,#1e242b);color:var(--primary-text-color,#fff);border-radius:16px;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,0.45);font-family:inherit;';
+
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid rgba(128,128,128,0.2);';
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;';
+    title.textContent = '⚡ NayaGram Hub (NG Control)';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'background:transparent;border:none;color:inherit;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:8px;';
+    closeBtn.onclick = () => overlay.remove();
+    header.append(title, closeBtn);
+    card.append(header);
+
+    const makeSection = (heading: string) => {
+      const sec = document.createElement('div');
+      sec.style.cssText = 'margin-bottom:16px;padding:12px;border-radius:12px;background:rgba(128,128,128,0.08);';
+      const h = document.createElement('div');
+      h.style.cssText = 'font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--primary-color,#3390ec);margin-bottom:8px;';
+      h.textContent = heading;
+      sec.append(h);
+      card.append(sec);
+      return sec;
+    };
+
+    const addToggle = (parent: HTMLElement, label: string, key: string, onChange?: (v: boolean) => void) => {
+      const row = document.createElement('label');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:7px 0;cursor:pointer;font-size:14px;gap:12px;';
+      const span = document.createElement('span');
+      span.textContent = label;
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!cfg[key];
+      input.style.cssText = 'width:18px;height:18px;cursor:pointer;accent-color:var(--primary-color,#3390ec);';
+      input.onchange = () => {
+        cfg[key] = input.checked;
+        save();
+        onChange?.(input.checked);
+      };
+      row.append(span, input);
+      parent.append(row);
+    };
+
+    // 1. Ghost & Privacy
+    const ghostSec = makeSection('👻 Ghost & Privacy Mode');
+    addToggle(ghostSec, 'Ghost Read (Do not mark messages as read)', 'ghostUnread');
+    addToggle(ghostSec, 'Hide Typing & Recording Status', 'ghostNoTyping');
+    addToggle(ghostSec, 'Always Stay Offline (Hide Online Status)', 'ghostOffline', () => {
+      appImManager.updateStatus();
+    });
+    addToggle(ghostSec, 'Forward Messages Without Author / Quote', 'forwardWithoutAuthor');
+
+    // 2. Anti-Delete & Edit History
+    const guardSec = makeSection('🛡️ Anti-Delete & Edit History Guard');
+    addToggle(guardSec, 'Anti-Delete Guard (Keep deleted messages in chat)', 'antiDelete');
+    addToggle(guardSec, 'Track Edited Message History', 'saveEditHistory');
+
+    // 3. Smart Auto-Reply
+    const autoSec = makeSection('🤖 Smart Auto-Reply (Private Chats)');
+    addToggle(autoSec, 'Enable Smart Auto-Reply', 'autoReplyEnabled');
+    const autoInput = document.createElement('input');
+    autoInput.type = 'text';
+    autoInput.value = cfg.autoReplyText || '';
+    autoInput.placeholder = 'Auto-reply message...';
+    autoInput.style.cssText = 'width:100%;margin-top:6px;padding:8px 10px;border-radius:8px;border:1px solid rgba(128,128,128,0.3);background:transparent;color:inherit;font-size:13px;';
+    autoInput.onchange = () => {
+      cfg.autoReplyText = autoInput.value;
+      save();
+    };
+    autoSec.append(autoInput);
+
+    // 4. Text Style & Signature
+    const styleSec = makeSection('✨ Outgoing Text Style & Auto-Signature');
+    const styleRow = document.createElement('div');
+    styleRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:14px;';
+    const styleLabel = document.createElement('span');
+    styleLabel.textContent = 'Font Style';
+    const select = document.createElement('select');
+    select.style.cssText = 'padding:5px 8px;border-radius:8px;border:1px solid rgba(128,128,128,0.3);background:var(--surface-color,#1e242b);color:inherit;font-size:13px;';
+    [
+      ['normal', 'Normal'],
+      ['bold', '𝐁𝐨𝐥𝐝'],
+      ['italic', '𝐼𝑡𝑎𝑙𝑖𝑐'],
+      ['monospace', '𝙼𝚘𝚗𝚘𝚜𝚙𝚊𝚌𝚎'],
+      ['smallCaps', 'Sᴍᴀʟʟ Cᴀᴘs']
+    ].forEach(([val, text]) => {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = text;
+      if(cfg.textStyle === val) opt.selected = true;
+      select.append(opt);
+    });
+    select.onchange = () => {
+      cfg.textStyle = select.value;
+      save();
+    };
+    styleRow.append(styleLabel, select);
+    styleSec.append(styleRow);
+
+    addToggle(styleSec, 'Append Auto-Signature to Sent Messages', 'autoSignatureEnabled');
+    const sigInput = document.createElement('input');
+    sigInput.type = 'text';
+    sigInput.value = cfg.autoSignatureText || '';
+    sigInput.placeholder = 'Signature text...';
+    sigInput.style.cssText = 'width:100%;margin-top:6px;padding:8px 10px;border-radius:8px;border:1px solid rgba(128,128,128,0.3);background:transparent;color:inherit;font-size:13px;';
+    sigInput.onchange = () => {
+      cfg.autoSignatureText = sigInput.value;
+      save();
+    };
+    styleSec.append(sigInput);
+
+    // 5. Security & Vault
+    const secSec = makeSection('🔒 Security & Anti-Delete Vault');
+    addToggle(secSec, 'Link Guard (Confirm before opening external links)', 'linkGuard');
+
+    const vaultBox = document.createElement('div');
+    vaultBox.style.cssText = 'margin-top:10px;max-height:140px;overflow-y:auto;font-size:12px;padding:8px;border-radius:8px;background:rgba(0,0,0,0.2);';
+    const renderVault = () => {
+      vaultBox.textContent = '';
+      let items: Array<{type: string, text: string, oldText?: string, time: number}> = [];
+      try {
+        items = JSON.parse(localStorage.getItem(VAULT_KEY) || '[]');
+      } catch {}
+      if(!items.length) {
+        vaultBox.textContent = 'No intercepted deleted or edited messages yet.';
+        return;
+      }
+      items.slice(0, 20).forEach((item) => {
+        const line = document.createElement('div');
+        line.style.cssText = 'padding:4px 0;border-bottom:1px solid rgba(128,128,128,0.15);';
+        line.textContent = item.type === 'deleted' ?
+          '🗑️ [Deleted] ' + item.text :
+          '✏️ [Edited] ' + (item.oldText || '') + ' → ' + item.text;
+        vaultBox.append(line);
+      });
+    };
+    renderVault();
+
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = 'Clear Vault History';
+    clearBtn.style.cssText = 'margin-top:8px;padding:6px 12px;border-radius:8px;border:none;background:var(--primary-color,#3390ec);color:#fff;font-size:12px;font-weight:600;cursor:pointer;';
+    clearBtn.onclick = () => {
+      try {
+        localStorage.removeItem(VAULT_KEY);
+      } catch {}
+      renderVault();
+      toastNew({langPackKey: 'Saved'});
+    };
+    secSec.append(vaultBox, clearBtn);
+
+    overlay.onclick = (e) => {
+      if(e.target === overlay) overlay.remove();
+    };
+    overlay.append(card);
+    document.body.append(overlay);
+  }
+
   public addTab(tab: SliderSuperTab) {
     super.addTab(tab);
     if(!tab.container.classList.contains('item-main')) {
